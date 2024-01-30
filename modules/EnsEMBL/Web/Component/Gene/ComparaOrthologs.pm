@@ -416,14 +416,28 @@ sub species_sets {
   my ($self, $orthologue_list, $orthologue_map, $cdb) = @_;
   my $hub             = $self->hub;
   my $species_defs    = $hub->species_defs;
+  my $is_pan          = $cdb =~/compara_pan_ensembl/;
 
   return "" if $self->hub->action =~ /^Strain/; #No summary table needed for strains
 
-  my ($set_order, $species_sets, $set_mappings) = $self->species_set_config;
+  my ($set_order, $species_sets, $set_mappings) = $self->species_set_config($cdb);  # setting $cdb enables us to fetch Pan species sets
+
   return "" unless $set_order;
 
-  my $compara_spp     = $species_defs->multi_hash->{'DATABASE_COMPARA'}{'COMPARA_SPECIES'};
-  my $lookup          = $species_defs->prodnames_to_urls_lookup;
+  my $compara_spp   = {};
+  my $lookup        = {};
+  my $pan_info      = {};
+  if ($is_pan) {
+    $pan_info = $species_defs->multi_val('PAN_COMPARA_LOOKUP');
+    foreach (keys %$pan_info) {
+      $compara_spp->{$_}  = 1;
+      $lookup->{$_}       = $pan_info->{$_}{'species_url'};
+    }
+  }
+  else {
+    $compara_spp  = $species_defs->multi_hash->{'DATABASE_COMPARA'}{'COMPARA_SPECIES'};
+    $lookup       = $species_defs->prodnames_to_urls_lookup;
+  }
   my %orthologue_map  = qw(SEED BRH PIP RHS);
   my $sets_by_species = {};
   my $ortho_type      = {};
@@ -452,6 +466,9 @@ sub species_sets {
     my $taxon_group     = $species_defs->get_config($species, 'SPECIES_GROUP');
     my @compara_groups  = $set_mappings ? @{$set_mappings->{$taxon_group}||[]}
                                         : ($taxon_group);
+    if ($is_pan) {
+      @compara_groups = ($pan_info->{$_}{'subdivision'} || $pan_info->{$_}{'division'});
+    }
     my $sets = [];
 
     foreach my $ss_name ('all', @compara_groups) {
